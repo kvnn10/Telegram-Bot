@@ -80,7 +80,6 @@ def query_ifreeicloud(identifier: str, service_id: str) -> Any:
         "imei": identifier,
         "key": IFREEICLOUD_PHP_API_KEY,
     }
-
     response = requests.post(IFREEICLOUD_URL, data=payload, timeout=30)
     response.raise_for_status()
 
@@ -139,11 +138,10 @@ def pick_first(obj: Dict[str, Any], keys: list[str]) -> Optional[str]:
 
 def parse_success(data: Any) -> str:
     if isinstance(data, dict):
-        success = data.get("success")
-        if success is True:
+        if data.get("success") is True:
             return "Correcta"
-        if success is False:
-            return "Sin confirmar"
+        if data.get("success") is False:
+            return "Error"
     return "Correcta"
 
 
@@ -231,23 +229,25 @@ def parse_carrier_info(data: Any) -> tuple[str, str]:
 
 
 def parse_model_info(data: Any) -> tuple[str, str]:
-    obj = get_obj(data)
-    blob = get_response_text(data)
+    try:
+        if isinstance(data, dict):
+            obj = data.get("object", {}) or {}
+            brand = obj.get("brand") or obj.get("manufacturer") or obj.get("make")
+            model = obj.get("model") or obj.get("device") or obj.get("name") or obj.get("product")
+            if brand or model:
+                return brand or "N/D", model or "N/D"
 
-    brand = pick_first(obj, ["brand", "manufacturer", "make"]) or "N/D"
-    model = pick_first(obj, ["model", "device", "name", "product"]) or "N/D"
+        text = get_response_text(data)
 
-    if brand == "N/D":
-        m = re.search(r"BRAND\s*:?\s*([^\n|,]+)", blob, re.IGNORECASE)
-        if m:
-            brand = m.group(1).strip()
+        brand_match = re.search(r"BRAND\s*:?\s*([^\n|,]+)", text, re.IGNORECASE)
+        model_match = re.search(r"MODEL\s*:?\s*([^\n|,]+)", text, re.IGNORECASE)
 
-    if model == "N/D":
-        m = re.search(r"MODEL\s*:?\s*([^\n|,]+)", blob, re.IGNORECASE)
-        if m:
-            model = m.group(1).strip()
+        brand = brand_match.group(1).strip() if brand_match else "N/D"
+        model = model_match.group(1).strip() if model_match else "N/D"
 
-    return brand, model
+        return brand, model
+    except Exception:
+        return "N/D", "N/D"
 
 
 def build_result_message(command_name: str, identifier: str, data: Any) -> str:
@@ -342,7 +342,7 @@ def handle_command(chat_id: int, text: str) -> None:
     if command in ["/start", "/help"]:
         send_message(
             chat_id,
-            "🤖 *Bot personal de checks*\n\n"
+            "🤖 *IMEI Check Server*\n\n"
             "*Comandos disponibles*\n"
             "`/model <imei>`\n"
             "`/fmi <imei>`\n"
@@ -397,7 +397,7 @@ def handle_command(chat_id: int, text: str) -> None:
 
 @app.get("/")
 async def root():
-    return {"ok": True}
+    return {"ok": True, "service": "telegrambotk"}
 
 
 @app.post("/api/webhook")
