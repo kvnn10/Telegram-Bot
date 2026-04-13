@@ -1,6 +1,9 @@
-# VERSION REPARADA - MULTIUSUARIO + TODOS LOS BOTONES + COMANDOS MANUALES
-# Nota: en Vercel el historial/contador en memoria puede reiniciarse entre invocaciones.
-# Por eso los comandos manuales (/model <imei>, /fmi <imei>, etc.) son la vía más estable.
+# VERSION FINAL CORREGIDA
+# - Multiusuario por ALLOWED_CHAT_IDS
+# - Todos los botones
+# - Comandos manuales estables
+# - Sin flujo roto de "envíame el IMEI" en botones
+# - Parser mejorado de garantía y AppleCare
 
 import os
 import re
@@ -111,15 +114,42 @@ def parse_model(text):
 
 
 def parse_status(text):
-    return "Activado ✅" if "Activated" in text else "No disponible"
+    upper = text.upper()
+    if "ACTIVATED" in upper:
+        return "Activado ✅"
+    return "No disponible"
 
 
 def parse_warranty(text):
-    return "Expirada ❌" if "Out Of Warranty" in text else "Vigente ✅"
+    upper = text.upper()
+    if "OUT OF WARRANTY" in upper or "EXPIRED" in upper or "COBERTURA VENCIÓ" in upper:
+        return "Expirada ❌"
+    if "LIMITED WARRANTY" in upper or "COVERAGE ACTIVE" in upper:
+        return "Vigente ✅"
+    return "No disponible"
 
 
 def parse_applecare(text):
-    return "No" if "AppleCare Eligible: No" in text else "Sí"
+    upper = text.upper()
+
+    if (
+        "APPLECARE ELIGIBLE: NO" in upper
+        or "NOT COVERED" in upper
+        or "OUT OF WARRANTY" in upper
+        or "REPAIRS AND SERVICE COVERAGE: EXPIRED" in upper
+        or "TELEPHONE TECHNICAL SUPPORT: EXPIRED" in upper
+        or "COBERTURA VENCIÓ" in upper
+    ):
+        return "No ❌"
+
+    if (
+        "APPLECARE ELIGIBLE: YES" in upper
+        or "APPLECARE+" in upper
+        or "COVERAGE ACTIVE" in upper
+    ):
+        return "Sí ✅"
+
+    return "No disponible"
 
 
 def parse_fmi(text):
@@ -315,8 +345,6 @@ async def webhook(req: Request):
             return {"ok": True}
 
         if action in SERVICES:
-            # En Vercel no es confiable guardar pending en memoria entre invocaciones.
-            # Por eso el botón solo enseña el formato correcto del comando.
             example = "/macfmi C02XXXXXXXXX" if action == "macfmi" else f"/{action} 356XXXXXXXXXXXX"
             send(
                 chat_id,
