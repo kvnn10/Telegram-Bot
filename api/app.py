@@ -17,41 +17,13 @@ IFREEICLOUD_PHP_API_KEY = os.getenv("IFREEICLOUD_PHP_API_KEY", "").strip()
 IDENTIFIER_REGEX = re.compile(r"^[A-Za-z0-9]{8,20}$")
 
 SERVICES = {
-    "model": {
-        "id": "0",
-        "title": "📱 RESULTADO IMEI",
-        "usage": "/model 356XXXXXXXXXXXX",
-    },
-    "fmi": {
-        "id": "4",
-        "title": "📱 RESULTADO IMEI",
-        "usage": "/fmi 356XXXXXXXXXXXX",
-    },
-    "fmidev": {
-        "id": "125",
-        "title": "📱 RESULTADO IMEI",
-        "usage": "/fmidev 356XXXXXXXXXXXX",
-    },
-    "blacklist": {
-        "id": "55",
-        "title": "🚨 BLACKLIST STATUS",
-        "usage": "/blacklist 356XXXXXXXXXXXX",
-    },
-    "carrier": {
-        "id": "255",
-        "title": "📡 CARRIER CHECK",
-        "usage": "/carrier 356XXXXXXXXXXXX",
-    },
-    "sample": {
-        "id": "238",
-        "title": "🧪 FREE CHECK SAMPLE",
-        "usage": "/sample 356XXXXXXXXXXXX",
-    },
-    "macfmi": {
-        "id": "247",
-        "title": "💻 RESULTADO MACBOOK",
-        "usage": "/macfmi C02XXXXXXXXX",
-    },
+    "model": {"id": "0", "usage": "/model 356XXXXXXXXXXXX"},
+    "fmi": {"id": "4", "usage": "/fmi 356XXXXXXXXXXXX"},
+    "fmidev": {"id": "125", "usage": "/fmidev 356XXXXXXXXXXXX"},
+    "blacklist": {"id": "55", "usage": "/blacklist 356XXXXXXXXXXXX"},
+    "carrier": {"id": "255", "usage": "/carrier 356XXXXXXXXXXXX"},
+    "sample": {"id": "238", "usage": "/sample 356XXXXXXXXXXXX"},
+    "macfmi": {"id": "247", "usage": "/macfmi C02XXXXXXXXX"},
 }
 
 
@@ -150,24 +122,12 @@ def parse_fmi_status(data: Any) -> str:
     obj = get_obj(data)
 
     on_patterns = [
-        "FMION TRUE",
-        "FMION: TRUE",
-        "FIND MY IPHONE ON",
-        "FIND MY IPHONE: ON",
-        "FIND MY ON",
-        "FIND MY: ON",
-        "ICLOUD ON",
-        "FMI ON",
+        "FMION TRUE", "FMION: TRUE", "FIND MY IPHONE ON", "FIND MY IPHONE: ON",
+        "FIND MY ON", "FIND MY: ON", "ICLOUD ON", "FMI ON",
     ]
     off_patterns = [
-        "FMION FALSE",
-        "FMION: FALSE",
-        "FIND MY IPHONE OFF",
-        "FIND MY IPHONE: OFF",
-        "FIND MY OFF",
-        "FIND MY: OFF",
-        "ICLOUD OFF",
-        "FMI OFF",
+        "FMION FALSE", "FMION: FALSE", "FIND MY IPHONE OFF", "FIND MY IPHONE: OFF",
+        "FIND MY OFF", "FIND MY: OFF", "ICLOUD OFF", "FMI OFF",
     ]
 
     if any(x in blob for x in on_patterns):
@@ -183,7 +143,7 @@ def parse_fmi_status(data: Any) -> str:
             if value in ["false", "off", "no", "0"]:
                 return "OFF 🟢"
 
-    return "N/D"
+    return "No disponible"
 
 
 def parse_blacklist_status(data: Any) -> str:
@@ -203,23 +163,23 @@ def parse_blacklist_status(data: Any) -> str:
         if "BLACKLIST" in v or "BLOCKED" in v:
             return "EN LISTA NEGRA 🚫"
 
-    return "N/D"
+    return "No disponible"
 
 
 def parse_carrier_info(data: Any) -> tuple[str, str]:
     obj = get_obj(data)
     blob = collect_text_candidates(data)
 
-    carrier = pick_first(obj, ["carrier", "network", "operator"]) or "N/D"
-    simlock = pick_first(obj, ["simlock", "sim_lock", "sim-lock", "lock_status"]) or "N/D"
+    carrier = pick_first(obj, ["carrier", "network", "operator"]) or "No disponible"
+    simlock = pick_first(obj, ["simlock", "sim_lock", "sim-lock", "lock_status"]) or "No disponible"
 
-    if carrier == "N/D":
+    if carrier == "No disponible":
         m = re.search(r"CARRIER\s*:?\s*([^\n|,]+)", blob, re.IGNORECASE)
         if m:
             carrier = m.group(1).strip()
 
     upper_blob = blob.upper()
-    if simlock == "N/D":
+    if simlock == "No disponible":
         if "UNLOCKED" in upper_blob:
             simlock = "UNLOCKED 🔓"
         elif "LOCKED" in upper_blob:
@@ -235,86 +195,90 @@ def parse_model_info(data: Any) -> tuple[str, str]:
             brand = obj.get("brand") or obj.get("manufacturer") or obj.get("make")
             model = obj.get("model") or obj.get("device") or obj.get("name") or obj.get("product")
             if brand or model:
-                return brand or "N/D", model or "N/D"
+                return brand or "No disponible", model or "No disponible"
 
         text = get_response_text(data)
-
         brand_match = re.search(r"BRAND\s*:?\s*([^\n|,]+)", text, re.IGNORECASE)
         model_match = re.search(r"MODEL\s*:?\s*([^\n|,]+)", text, re.IGNORECASE)
 
-        brand = brand_match.group(1).strip() if brand_match else "N/D"
-        model = model_match.group(1).strip() if model_match else "N/D"
-
+        brand = brand_match.group(1).strip() if brand_match else "No disponible"
+        model = model_match.group(1).strip() if model_match else "No disponible"
         return brand, model
     except Exception:
-        return "N/D", "N/D"
+        return "No disponible", "No disponible"
+
+
+def pretty_success(value: str) -> str:
+    if value.lower() == "correcta":
+        return "Correcta ✅"
+    if value.lower() == "error":
+        return "Error ⚠️"
+    return value
 
 
 def build_result_message(command_name: str, identifier: str, data: Any) -> str:
-    config = SERVICES[command_name]
-    success_text = parse_success(data)
+    success_text = pretty_success(parse_success(data))
 
     if command_name in ["fmi", "fmidev"]:
         status = parse_fmi_status(data)
         return (
-            f"{config['title']}\n\n"
-            f"*IMEI:* `{identifier}`\n\n"
-            f"*FMI:* `{status}`\n\n"
-            f"*Consulta:* `{success_text}`"
+            "📱 *IMEI CHECK*\n\n"
+            f"• *IMEI:* `{identifier}`\n"
+            f"• *FMI:* `{status}`\n"
+            f"• *Estado:* `{success_text}`"
         )
 
     if command_name == "macfmi":
         status = parse_fmi_status(data)
         return (
-            f"{config['title']}\n\n"
-            f"*Serial/IMEI:* `{identifier}`\n\n"
-            f"*FMI:* `{status}`\n\n"
-            f"*Consulta:* `{success_text}`"
+            "💻 *MACBOOK CHECK*\n\n"
+            f"• *Serial/IMEI:* `{identifier}`\n"
+            f"• *FMI:* `{status}`\n"
+            f"• *Estado:* `{success_text}`"
         )
 
     if command_name == "blacklist":
         status = parse_blacklist_status(data)
         return (
-            f"{config['title']}\n\n"
-            f"*IMEI:* `{identifier}`\n\n"
-            f"*Estado:* `{status}`\n\n"
-            f"*Consulta:* `{success_text}`"
+            "🚨 *BLACKLIST CHECK*\n\n"
+            f"• *IMEI:* `{identifier}`\n"
+            f"• *Estado:* `{status}`\n"
+            f"• *Consulta:* `{success_text}`"
         )
 
     if command_name == "carrier":
         carrier, simlock = parse_carrier_info(data)
         return (
-            f"{config['title']}\n\n"
-            f"*IMEI:* `{identifier}`\n\n"
-            f"*Carrier:* `{carrier}`\n\n"
-            f"*SIM-Lock:* `{simlock}`\n\n"
-            f"*Consulta:* `{success_text}`"
+            "📡 *CARRIER CHECK*\n\n"
+            f"• *IMEI:* `{identifier}`\n"
+            f"• *Carrier:* `{carrier}`\n"
+            f"• *SIM-Lock:* `{simlock}`\n"
+            f"• *Consulta:* `{success_text}`"
         )
 
     if command_name == "model":
         brand, model = parse_model_info(data)
         return (
-            f"{config['title']}\n\n"
-            f"*IMEI:* `{identifier}`\n\n"
-            f"*Marca:* `{brand}`\n\n"
-            f"*Modelo:* `{model}`\n\n"
-            f"*Consulta:* `{success_text}`"
+            "📱 *DEVICE INFO*\n\n"
+            f"• *IMEI:* `{identifier}`\n"
+            f"• *Marca:* `{brand}`\n"
+            f"• *Modelo:* `{model}`\n"
+            f"• *Consulta:* `{success_text}`"
         )
 
     if command_name == "sample":
         detail = get_response_text(data) or "Sin detalle"
         return (
-            f"{config['title']}\n\n"
-            f"*IMEI:* `{identifier}`\n\n"
-            f"*Detalle:* `{detail[:700]}`\n\n"
-            f"*Consulta:* `{success_text}`"
+            "🧪 *FREE CHECK SAMPLE*\n\n"
+            f"• *IMEI:* `{identifier}`\n"
+            f"• *Detalle:* `{detail[:500]}`\n"
+            f"• *Consulta:* `{success_text}`"
         )
 
     return (
-        f"{config['title']}\n\n"
-        f"*Consulta:* `{identifier}`\n\n"
-        f"*Resultado:* `N/D`\n\n"
-        f"*Consulta:* `{success_text}`"
+        "📦 *RESULTADO*\n\n"
+        f"• *Consulta:* `{identifier}`\n"
+        f"• *Estado:* `{success_text}`"
     )
 
 
@@ -324,14 +288,11 @@ def telegram_api(method: str, payload: Dict[str, Any]) -> requests.Response:
 
 
 def send_message(chat_id: int, text: str) -> None:
-    telegram_api(
-        "sendMessage",
-        {
-            "chat_id": chat_id,
-            "text": text,
-            "parse_mode": "Markdown",
-        },
-    )
+    telegram_api("sendMessage", {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "Markdown",
+    })
 
 
 def handle_command(chat_id: int, text: str) -> None:
@@ -343,15 +304,15 @@ def handle_command(chat_id: int, text: str) -> None:
         send_message(
             chat_id,
             "🤖 *IMEI Check Server*\n\n"
-            "*Comandos disponibles*\n"
-            "`/model <imei>`\n"
-            "`/fmi <imei>`\n"
-            "`/fmidev <imei>`\n"
-            "`/blacklist <imei>`\n"
-            "`/carrier <imei>`\n"
-            "`/sample <imei>`\n"
-            "`/macfmi <serial_o_imei>`\n"
-            "`/myid`",
+            "*Comandos disponibles:*\n"
+            "• `/model <imei>`\n"
+            "• `/fmi <imei>`\n"
+            "• `/fmidev <imei>`\n"
+            "• `/blacklist <imei>`\n"
+            "• `/carrier <imei>`\n"
+            "• `/sample <imei>`\n"
+            "• `/macfmi <serial_o_imei>`\n"
+            "• `/myid`"
         )
         return
 
@@ -385,7 +346,7 @@ def handle_command(chat_id: int, text: str) -> None:
         send_message(chat_id, "Dato inválido. Debe ser un IMEI o serial alfanumérico válido.")
         return
 
-    send_message(chat_id, "Consultando...")
+    send_message(chat_id, "⏳ Consultando, espera un momento...")
 
     try:
         data = query_ifreeicloud(identifier, config["id"])
