@@ -94,6 +94,10 @@ def query(service, imei):
     r = requests.post(IFREEICLOUD_URL, data=payload)
     return clean(r.text)
 
+@app.get("/")
+async def root():
+    return {"ok": True, "service": "telegrambotk"}
+
 @app.post("/api/webhook")
 async def webhook(req: Request):
 
@@ -131,11 +135,11 @@ async def webhook(req: Request):
 
     text = msg.get("text", "")
 
-    if text == "/start":
+    if text and text.startswith("/start"):
         send(chat_id, "🤖 *IMEI Check PRO*\nSelecciona una opción:")
         return {"ok": True}
 
-    if text == "/myid":
+    if text and text.startswith("/myid"):
         send(chat_id, f"🆔 Tu ID: `{chat_id}`")
         return {"ok": True}
 
