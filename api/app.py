@@ -1,4 +1,4 @@
-# APP PREMIUM VERSION - CLEAN UI (NO SPAM BUTTONS)
+# FINAL PREMIUM APP.PY (CLEAN + FIXED + ALL SERVICES)
 
 import os
 import re
@@ -113,8 +113,7 @@ async def webhook(req: Request):
             return {"ok": True}
 
         if action in SERVICES:
-            send(chat_id, f"👉 Usa:
-`/{action} 356XXXXXXXXXXXX`")
+            send(chat_id, f"👉 Usa:\n`/{action} 356XXXXXXXXXXXX`")
             return {"ok": True}
 
     msg = data.get("message", {})
@@ -125,8 +124,7 @@ async def webhook(req: Request):
         return {"ok": True}
 
     if text.startswith("/start"):
-        send(chat_id, "🤖 IMEI Check PRO
-Selecciona una opción:", True)
+        send(chat_id, "🤖 IMEI Check PRO\nSelecciona una opción:", True)
         return {"ok": True}
 
     for action in SERVICES:
@@ -145,9 +143,7 @@ Selecciona una opción:", True)
 
             update_user(chat_id, f"{action}:{imei}")
 
-            send(chat_id, f"✅ Resultado:
-`{result[:500]}`
-⏱ {elapsed}ms", True)
+            send(chat_id, f"✅ Resultado:\n`{result[:500]}`\n⏱ {elapsed}ms", True)
             return {"ok": True}
 
     return {"ok": True}
