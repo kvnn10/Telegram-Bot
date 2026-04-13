@@ -1,6 +1,5 @@
 import os
 import re
-import html
 import requests
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -83,9 +82,13 @@ IMEI: {imei}
 
 Consulta: Correcta"""
 
+# 👇 ESTE ES EL CAMBIO CLAVE PARA VERCEL
 def handler(request):
     if request.method == "GET":
-        return {"status": "ok"}
+        return {
+            "statusCode": 200,
+            "body": "OK"
+        }
 
     body = request.get_json()
 
@@ -94,11 +97,11 @@ def handler(request):
     text = message.get("text", "")
 
     if str(chat_id) != ALLOWED_CHAT_ID:
-        return {"ok": True}
+        return {"statusCode": 200, "body": "ok"}
 
     if not text.startswith("/"):
         send_message(chat_id, "Usa un comando como /fmi 356XXXX")
-        return {"ok": True}
+        return {"statusCode": 200, "body": "ok"}
 
     parts = text.split(" ", 1)
     cmd = parts[0].replace("/", "")
@@ -106,11 +109,11 @@ def handler(request):
 
     if cmd not in SERVICES:
         send_message(chat_id, "Comando no válido")
-        return {"ok": True}
+        return {"statusCode": 200, "body": "ok"}
 
     if not IDENTIFIER_REGEX.match(imei):
         send_message(chat_id, "IMEI inválido")
-        return {"ok": True}
+        return {"statusCode": 200, "body": "ok"}
 
     send_message(chat_id, "Consultando...")
 
@@ -119,4 +122,4 @@ def handler(request):
 
     send_message(chat_id, result)
 
-    return {"ok": True}
+    return {"statusCode": 200, "body": "ok"}
