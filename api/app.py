@@ -1,4 +1,5 @@
-# 🔥 VERSION 10/10 - PREMIUM + MULTIUSUARIO + BOTONES + CONTADOR + HISTORIAL
+# VERSION 10/10 - PREMIUM + MULTIUSUARIO + BOTONES + CONTADOR + HISTORIAL
+# Incluye comandos manuales /start /myid /model <imei> /fmi <imei>
 
 import os
 import re
@@ -28,8 +29,10 @@ SERVICES = {
     "fmi": "4",
 }
 
+
 def is_allowed(chat_id):
     return str(chat_id) in ALLOWED_CHAT_IDS
+
 
 def send(chat_id, text, buttons=True):
     payload = {
@@ -52,25 +55,35 @@ def send(chat_id, text, buttons=True):
             ]
         }
 
-    requests.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage", json=payload)
+    requests.post(
+        f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+        json=payload,
+        timeout=30,
+    )
+
 
 def clean(text):
     text = html.unescape(str(text))
     text = re.sub(r"<[^>]+>", "", text)
     return text.strip()
 
+
 def parse_model(text):
     match = re.search(r"(iPhone [^\n]+)", text)
     return match.group(1) if match else "No disponible"
 
+
 def parse_status(text):
     return "Activado ✅" if "Activated" in text else "No disponible"
+
 
 def parse_warranty(text):
     return "Expirada ❌" if "Out Of Warranty" in text else "Vigente ✅"
 
+
 def parse_applecare(text):
     return "No" if "AppleCare Eligible: No" in text else "Sí"
+
 
 def update_user(chat_id, imei):
     uid = str(chat_id)
@@ -84,6 +97,7 @@ def update_user(chat_id, imei):
     if len(USER_STATS[uid]["history"]) > 5:
         USER_STATS[uid]["history"].pop(0)
 
+
 def query(service, imei):
     payload = {
         "service": SERVICES[service],
@@ -91,16 +105,51 @@ def query(service, imei):
         "key": API_KEY
     }
 
-    r = requests.post(IFREEICLOUD_URL, data=payload)
+    r = requests.post(IFREEICLOUD_URL, data=payload, timeout=30)
     return clean(r.text)
+
+
+def run_lookup(chat_id, action, imei):
+    if not IDENTIFIER_REGEX.match(imei):
+        send(chat_id, "❌ IMEI inválido", False)
+        return
+
+    start = time.time()
+    result = query(action, imei)
+    elapsed = int((time.time() - start) * 1000)
+
+    update_user(chat_id, imei)
+
+    if action == "model":
+        text = (
+            "📲 *DEVICE INFO*\n\n"
+            f"• IMEI: `{imei}`\n"
+            f"• Modelo: {parse_model(result)}\n"
+            f"• Estado: {parse_status(result)}\n"
+            f"• Garantía: {parse_warranty(result)}\n"
+            f"• AppleCare: {parse_applecare(result)}\n\n"
+            f"⏱ {elapsed} ms"
+        )
+        send(chat_id, text)
+
+    if action == "fmi":
+        fmi = "ON 🔴" if "ON" in result.upper() else "OFF 🟢"
+        text = (
+            "📱 *IMEI CHECK*\n\n"
+            f"• IMEI: `{imei}`\n"
+            f"• FMI: {fmi}\n\n"
+            f"⏱ {elapsed} ms"
+        )
+        send(chat_id, text)
+
 
 @app.get("/")
 async def root():
     return {"ok": True, "service": "telegrambotk"}
 
+
 @app.post("/api/webhook")
 async def webhook(req: Request):
-
     data = await req.json()
 
     if "callback_query" in data:
@@ -123,7 +172,7 @@ async def webhook(req: Request):
             send(chat_id, f"📈 Has hecho *{count} consultas*")
             return {"ok": True}
 
-        send(chat_id, f"Envía el IMEI para *{action.upper()}*", False)
+        send(chat_id, f"✅ Seleccionaste *{action.upper()}*\n\nEnvíame el IMEI para continuar.", False)
         USER_STATS.setdefault(str(chat_id), {})["pending"] = action
         return {"ok": True}
 
@@ -133,57 +182,40 @@ async def webhook(req: Request):
     if not is_allowed(chat_id):
         return {"ok": True}
 
-    text = msg.get("text", "")
+    text = (msg.get("text", "") or "").strip()
 
-    if text and text.startswith("/start"):
+    if text.startswith("/start"):
         send(chat_id, "🤖 *IMEI Check PRO*\nSelecciona una opción:")
         return {"ok": True}
 
-    if text and text.startswith("/myid"):
-        send(chat_id, f"🆔 Tu ID: `{chat_id}`")
+    if text.startswith("/myid"):
+        send(chat_id, f"🆔 Tu ID: `{chat_id}`", False)
+        return {"ok": True}
+
+    if text.startswith("/model"):
+        parts = text.split()
+        if len(parts) < 2:
+            send(chat_id, "❌ Usa: `/model 356XXXXXXXXXXXX`", False)
+            return {"ok": True}
+        run_lookup(chat_id, "model", parts[1].strip())
+        return {"ok": True}
+
+    if text.startswith("/fmi"):
+        parts = text.split()
+        if len(parts) < 2:
+            send(chat_id, "❌ Usa: `/fmi 356XXXXXXXXXXXX`", False)
+            return {"ok": True}
+        run_lookup(chat_id, "fmi", parts[1].strip())
         return {"ok": True}
 
     uid = str(chat_id)
     action = USER_STATS.get(uid, {}).get("pending")
 
     if action:
-        imei = text.strip()
-
-        if not IDENTIFIER_REGEX.match(imei):
-            send(chat_id, "❌ IMEI inválido")
-            return {"ok": True}
-
-        start = time.time()
-        result = query(action, imei)
-        elapsed = int((time.time() - start) * 1000)
-
-        update_user(chat_id, imei)
-
-        if action == "model":
-            send(chat_id, f'''
-📲 *DEVICE INFO*
-
-• IMEI: `{imei}`
-• Modelo: {parse_model(result)}
-• Estado: {parse_status(result)}
-• Garantía: {parse_warranty(result)}
-• AppleCare: {parse_applecare(result)}
-
-⏱ {elapsed} ms
-''')
-
-        if action == "fmi":
-            fmi = "ON 🔴" if "ON" in result.upper() else "OFF 🟢"
-
-            send(chat_id, f'''
-📱 *IMEI CHECK*
-
-• IMEI: `{imei}`
-• FMI: {fmi}
-
-⏱ {elapsed} ms
-''')
-
+        imei = text
         USER_STATS[uid]["pending"] = None
+        run_lookup(chat_id, action, imei)
+        return {"ok": True}
 
+    send(chat_id, "Usa los botones o envía un comando como `/model 356XXXXXXXXXXXX`", True)
     return {"ok": True}
