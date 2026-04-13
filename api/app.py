@@ -117,6 +117,18 @@ def parse_success(data: Any) -> str:
     return "Correcta"
 
 
+def parse_error_detail(data: Any) -> str:
+    if isinstance(data, dict):
+        for key in ["error", "message", "response"]:
+            value = data.get(key)
+            if value:
+                text = strip_html_tags(str(value)).strip()
+                if text:
+                    return text[:300]
+    text = strip_html_tags(str(data)).strip()
+    return text[:300] if text else "Sin detalle"
+
+
 def parse_fmi_status(data: Any) -> str:
     blob = collect_text_candidates(data).upper()
     obj = get_obj(data)
@@ -203,12 +215,13 @@ def parse_model_info(data: Any) -> tuple[str, str]:
 
         brand = brand_match.group(1).strip() if brand_match else "No disponible"
         model = model_match.group(1).strip() if model_match else "No disponible"
+
         return brand, model
     except Exception:
         return "No disponible", "No disponible"
 
 
-def pretty_success(value: str) -> str:
+def premium_status(value: str) -> str:
     if value.lower() == "correcta":
         return "Correcta ✅"
     if value.lower() == "error":
@@ -217,63 +230,95 @@ def pretty_success(value: str) -> str:
 
 
 def build_result_message(command_name: str, identifier: str, data: Any) -> str:
-    success_text = pretty_success(parse_success(data))
+    success_raw = parse_success(data)
+    error_detail = parse_error_detail(data)
+    success_text = premium_status(success_raw)
 
     if command_name in ["fmi", "fmidev"]:
         status = parse_fmi_status(data)
-        return (
-            "📱 *IMEI CHECK*\n\n"
+        message = (
+            "╔══════════════╗\n"
+            "📱 *IMEI CHECK*\n"
+            "╚══════════════╝\n\n"
             f"• *IMEI:* `{identifier}`\n"
             f"• *FMI:* `{status}`\n"
-            f"• *Estado:* `{success_text}`"
+            f"• *Consulta:* `{success_text}`"
         )
+        if success_raw.lower() == "error":
+            message += f"\n• *Detalle API:* `{error_detail}`"
+        return message
 
     if command_name == "macfmi":
         status = parse_fmi_status(data)
-        return (
-            "💻 *MACBOOK CHECK*\n\n"
+        message = (
+            "╔════════════════╗\n"
+            "💻 *MACBOOK CHECK*\n"
+            "╚════════════════╝\n\n"
             f"• *Serial/IMEI:* `{identifier}`\n"
             f"• *FMI:* `{status}`\n"
-            f"• *Estado:* `{success_text}`"
+            f"• *Consulta:* `{success_text}`"
         )
+        if success_raw.lower() == "error":
+            message += f"\n• *Detalle API:* `{error_detail}`"
+        return message
 
     if command_name == "blacklist":
         status = parse_blacklist_status(data)
-        return (
-            "🚨 *BLACKLIST CHECK*\n\n"
+        message = (
+            "╔══════════════════╗\n"
+            "🚨 *BLACKLIST CHECK*\n"
+            "╚══════════════════╝\n\n"
             f"• *IMEI:* `{identifier}`\n"
             f"• *Estado:* `{status}`\n"
             f"• *Consulta:* `{success_text}`"
         )
+        if success_raw.lower() == "error":
+            message += f"\n• *Detalle API:* `{error_detail}`"
+        return message
 
     if command_name == "carrier":
         carrier, simlock = parse_carrier_info(data)
-        return (
-            "📡 *CARRIER CHECK*\n\n"
+        message = (
+            "╔════════════════╗\n"
+            "📡 *CARRIER CHECK*\n"
+            "╚════════════════╝\n\n"
             f"• *IMEI:* `{identifier}`\n"
             f"• *Carrier:* `{carrier}`\n"
             f"• *SIM-Lock:* `{simlock}`\n"
             f"• *Consulta:* `{success_text}`"
         )
+        if success_raw.lower() == "error":
+            message += f"\n• *Detalle API:* `{error_detail}`"
+        return message
 
     if command_name == "model":
         brand, model = parse_model_info(data)
-        return (
-            "📱 *DEVICE INFO*\n\n"
+        message = (
+            "╔══════════════╗\n"
+            "📲 *DEVICE INFO*\n"
+            "╚══════════════╝\n\n"
             f"• *IMEI:* `{identifier}`\n"
             f"• *Marca:* `{brand}`\n"
             f"• *Modelo:* `{model}`\n"
             f"• *Consulta:* `{success_text}`"
         )
+        if success_raw.lower() == "error":
+            message += f"\n• *Detalle API:* `{error_detail}`"
+        return message
 
     if command_name == "sample":
         detail = get_response_text(data) or "Sin detalle"
-        return (
-            "🧪 *FREE CHECK SAMPLE*\n\n"
+        message = (
+            "╔══════════════════╗\n"
+            "🧪 *FREE CHECK SAMPLE*\n"
+            "╚══════════════════╝\n\n"
             f"• *IMEI:* `{identifier}`\n"
-            f"• *Detalle:* `{detail[:500]}`\n"
+            f"• *Detalle:* `{detail[:300]}`\n"
             f"• *Consulta:* `{success_text}`"
         )
+        if success_raw.lower() == "error":
+            message += f"\n• *Detalle API:* `{error_detail}`"
+        return message
 
     return (
         "📦 *RESULTADO*\n\n"
@@ -303,15 +348,17 @@ def handle_command(chat_id: int, text: str) -> None:
     if command in ["/start", "/help"]:
         send_message(
             chat_id,
-            "🤖 *IMEI Check Server*\n\n"
-            "*Comandos disponibles:*\n"
-            "• `/model <imei>`\n"
-            "• `/fmi <imei>`\n"
-            "• `/fmidev <imei>`\n"
-            "• `/blacklist <imei>`\n"
-            "• `/carrier <imei>`\n"
-            "• `/sample <imei>`\n"
-            "• `/macfmi <serial_o_imei>`\n"
+            "╔════════════════════╗\n"
+            "🤖 *IMEI Check Server*\n"
+            "╚════════════════════╝\n\n"
+            "📋 *Comandos disponibles*\n\n"
+            "• `/model 356XXXXXXXXXXXX`\n"
+            "• `/fmi 356XXXXXXXXXXXX`\n"
+            "• `/fmidev 356XXXXXXXXXXXX`\n"
+            "• `/blacklist 356XXXXXXXXXXXX`\n"
+            "• `/carrier 356XXXXXXXXXXXX`\n"
+            "• `/sample 356XXXXXXXXXXXX`\n"
+            "• `/macfmi C02XXXXXXXXX`\n"
             "• `/myid`"
         )
         return
